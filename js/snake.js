@@ -1,14 +1,15 @@
 "set strict";
 
-
-var SnakeGame = function(query, params) {
+function SnakeGame(query, params) {
 	this.container = document.querySelector(query);
 	
-	this.width = params.width;
-	this.height = params.height;
+	this.width = params.width / params.cellSize;
+	this.height = params.height / params.cellSize;
 	
 	this.cellSize = params.cellSize;
+	this.maxCookies = params.maxCookies;
 	this.speed = params.speed;
+
 	this.isPaused = true;
 	this.isOver = false;
 
@@ -66,13 +67,13 @@ var SnakeGame = function(query, params) {
 	this.generateCookie = function() {
 		var x, y, value, cookie;
 
-		x = Math.floor((Math.random() * this.width / this.cellSize)) * this.cellSize;
-		y = Math.floor((Math.random() * this.height / this.cellSize)) * this.cellSize;
+		x = Math.floor((Math.random() * this.width));
+		y = Math.floor((Math.random() * this.height));
 
 		cookie = new Cookie(x, y, 10, 'rgba(0, 0, 255)', 3);
 
 		this.cookies.push(cookie);
-		this.board[y / this.cellSize][x / this.cellSize] = cookie;
+		this.board[y][x] = cookie;
 	}
 
 	this.clear = function() {
@@ -88,8 +89,8 @@ var SnakeGame = function(query, params) {
 			{
 				item = new Array();
 
-				item[0] = (snake.x + i * snake.direction[0]) * this.cellSize;
-				item[1] = (snake.y + i * snake.direction[1]) * this.cellSize;
+				item[0] = (snake.x + i * snake.direction[0]);
+				item[1] = (snake.y + i * snake.direction[1]);
 				this.board[snake.y + i * snake.direction[1]][snake.x + i * snake.direction[0]] = 's';
 
 				snake.trail.enqueue(item);
@@ -98,34 +99,34 @@ var SnakeGame = function(query, params) {
 
 		// We find out the next position of the head
 		head = snake.trail.headCell();
-		next[0] = head[0] + (1 * snake.direction[0]) * this.cellSize;
-		next[1] = head[1] + (1 * snake.direction[1]) * this.cellSize;
+		next[0] = head[0] + (1 * snake.direction[0]);
+		next[1] = head[1] + (1 * snake.direction[1]);
 
 		// Walking through borders in mirror mode - vertical
-		if (next[0] == this.canvas.width) {
+		if (next[0] == this.width) {
 			next[0] = 0;
 		}
 		else if (next[0] < 0) {
-			next[0] = this.canvas.width - 1 * this.cellSize;
+			next[0] = this.width - 1;
 		}
 
 		// Walking through borders in mirror mode - horizontal
-		if (next[1] == this.canvas.height) {
+		if (next[1] == this.height) {
 			next[1] = 0;
 		}
 		else if (next[1] < 0) {
-			next[1] = this.canvas.height - 1 * this.cellSize;
+			next[1] = this.height - 1;
 		}
 
 		// We get the value of the next position
-		aux = this.board[next[1] / this.cellSize][next[0] / this.cellSize];
+		aux = this.board[next[1]][next[0]];
 
 		// We evaluate the value with some rules
 		if (aux === null) {
 			tail = snake.trail.tailCell();
 
-			this.board[tail[1] / this.cellSize][tail[0] / this.cellSize] = null;
-			this.board[next[1] / this.cellSize][next[0] / this.cellSize] = 's';
+			this.board[tail[1]][tail[0]] = null;
+			this.board[next[1]][next[0]] = 's';
 
 			// We increaseSupplies the supplies if while we have
 			if (snake.supplies == 0) {
@@ -145,7 +146,7 @@ var SnakeGame = function(query, params) {
 
 			//If snake hit a cookie
 			if (aux instanceof Cookie) {
-				this.board[next[1] / this.cellSize][next[0] / this.cellSize] = 's';
+				this.board[next[1]][next[0]] = 's';
 
 				snake.increaseSupplies(aux);
 				snake.trail.enqueue(next);
@@ -171,25 +172,43 @@ var SnakeGame = function(query, params) {
 		this.clear();
 
 		// Draw Snake
-		this.snakes[0].trail.queue.forEach(function(cell){
+		this.snakes[0].trail.queue.forEach(function(cell, index, queue){
 			context.canvas.fillStyle = context.snakes[0].color;
-    		context.canvas.fillRect(
-    			cell[0], 
-    			cell[1], 
-    			context.cellSize, 
-    			context.cellSize
-    		);
+			
+			if (index != 0 && index != queue.length-1) {
+	    		context.canvas.fillRect(
+	    			cell[0] * context.cellSize, 
+	    			cell[1] * context.cellSize, 
+	    			context.cellSize, 
+	    			context.cellSize
+	    		);
+			} else {
+				context.canvas.beginPath();
+	      		context.canvas.arc(
+	      			cell[0] * context.cellSize + context.cellSize / 2, 
+	      			cell[1] * context.cellSize + context.cellSize / 2, 
+	      			context.cellSize / 2, 
+	      			0, 
+	      			2 * Math.PI, 
+	      			false
+	      		);
+				context.canvas.fill();
+			}
 		});
 
 		// Draw Cookies
 		this.cookies.forEach(function(cookie){
 			context.canvas.fillStyle = cookie.color;
-			context.canvas.fillRect(
-    			cookie.x, 
-    			cookie.y, 
-    			context.cellSize, 
-    			context.cellSize
-    		);	
+			context.canvas.beginPath();
+      		context.canvas.arc(
+      			cookie.x * context.cellSize + context.cellSize / 2, 
+      			cookie.y * context.cellSize + context.cellSize / 2, 
+      			context.cellSize / 2, 
+      			0, 
+      			2 * Math.PI, 
+      			false
+      		);
+			context.canvas.fill();
 		});
 		
 		setTimeout(function() {
@@ -288,13 +307,13 @@ var SnakeGame = function(query, params) {
 
 	this.init = function () {
 		if (this.container.getContext){
-			this.container.width = this.width;
-			this.container.height = this.height;
+			this.container.width = this.width * this.cellSize;
+			this.container.height = this.height * this.cellSize;
 
 			// Create the Matrix
-			for (i=0; i<this.height/this.cellSize; i++){
+			for (i=0; i<this.height; i++){
 				this.board[i] = new Array();
-				for (j=0; j<this.width/this.cellSize; j++)
+				for (j=0; j<this.width; j++)
 					{
 						this.board[i][j] = null;
 					}
@@ -302,8 +321,8 @@ var SnakeGame = function(query, params) {
 
 			// Create the canvas properties
 			this.canvas = this.container.getContext("2d");
-			this.canvas.width = this.width;
-			this.canvas.height = this.height;
+			this.canvas.width = this.width * this.cellSize;
+			this.canvas.height = this.height * this.cellSize;
 
 			// Generate Snake
 		  	this.snakes[0] = new Snake(3, 5 ,10, [1, 0], "rgb(200,0,0)", this.speed);
@@ -318,7 +337,8 @@ snake = new SnakeGame("#snake", {
 	'width': 600,
 	'height': 400,
 	'cellSize': 10,
-	'speed': 100
+	'speed': 50,
+	'maxCookies': 5
 });
 
 snake.init();
