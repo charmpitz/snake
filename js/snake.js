@@ -3,34 +3,36 @@
 
 var SnakeGame = function(query, params) {
 	this.container = document.querySelector(query);
+	
 	this.width = params.width;
 	this.height = params.height;
+	
 	this.cellSize = params.cellSize;
 	this.speed = params.speed;
+	this.isPaused = true;
+	this.isOver = false;
+
+	this.board = new Array();
 	this.snakes = new Array();
-	this.pause = true;
 	this.cookies = new Array();
 
-	var Cookie = function(x, y, cellSize, value, color) {
+	var Cookie = function(x, y, value, color, calories) {
 		this.x = x;
 		this.y = y;
-		this.cellSize = cellSize;
 		this.value = value;
 		this.color = "rgb(0, 0 ,255)";
+		this.calories = calories;
 	}
 
-	var Snake = function(canvas, x, y, size, direction, cellSize, color, speed) {
-		this.canvas = canvas;
+	var Snake = function(x, y, size, direction, color, speed) {
 		this.x = x;
 		this.y = y;
 		this.size = size;
 		this.direction = direction;
-		this.cellSize = cellSize;
 		this.color = color;
 		this.speed = speed;
-		this.isMoving = true;
 		this.score = 0;
-
+		this.supplies = 0;
 
 		var Trail = function () {
 			this.queue = new Array();
@@ -44,138 +46,171 @@ var SnakeGame = function(query, params) {
 				return this.queue.shift();
 			}
 
-			this.lastItem = function() {
+			this.headCell = function() {
 				return this.queue.slice(-1)[0];
 			}
 
-			this.nextItem = function() {
-				var item = this.queue[this.current];
-
-				if (this.current == this.queue.length){
-					this.current = 0;
-					return false;
-				}
-
-				this.current++;
-				return item;
+			this.tailCell = function() {
+				return this.queue.slice(0, 1)[0];
 			}
 		}
 
-		this.toggle = function() {
-			this.isMoving = this.isMoving ? false : true;
-			if (!this.isMoving)
-				this.move();
+		this.increaseSupplies = function(cookie) {
+			this.score += cookie.value;
+			this.supplies += cookie.calories;
 		}
 
-		this.move = function() {
-			var item, last, aux=[];
-
-			if (this.trail.queue.length == 0) {
-				
-				for (i=0; i<this.size; i++)				
-				{
-					item = new Array();
-
-					item[0] = (this.x + i * this.direction[0]) * this.cellSize;
-					item[1] = (this.y + i * this.direction[1]) * this.cellSize;
-
-					this.trail.enqueue(item);
-				}
-			}
-
-			last = this.trail.lastItem();
-
-			aux[0] = last[0] + (1 * this.direction[0]) * this.cellSize;
-			aux[1] = last[1] + (1 * this.direction[1]) * this.cellSize;
-
-			if (aux[0] == this.canvas.width) {
-				aux[0] = 0;
-			}
-			else if (aux[0] < 0) {
-				aux[0] = this.canvas.width;
-			}
-
-			if (aux[1] == this.canvas.height) {
-				aux[1] = 0;
-			}
-			else if (aux[1] < 0) {
-				aux[1] = this.canvas.height;
-			}
-
-			this.trail.dequeue();
-			this.trail.enqueue(aux);
-
-			if (this.isMoving == true)
-				return false;
-
-			var context = this;
-			setTimeout(function() {
-				context.move();
-			}, this.speed);
-		}
-
-
-		// #########################################################
 		this.trail = new Trail();
 	}
 
 	this.generateCookie = function() {
 		var x, y, value, cookie;
+
 		x = Math.floor((Math.random() * this.width / this.cellSize)) * this.cellSize;
 		y = Math.floor((Math.random() * this.height / this.cellSize)) * this.cellSize;
-		value = 10;
 
-		cookie = new Cookie(x, y, value);
-		console.log(cookie);
+		cookie = new Cookie(x, y, 10, 'rgba(0, 0, 255)', 3);
+
 		this.cookies.push(cookie);
+		this.board[y / this.cellSize][x / this.cellSize] = cookie;
 	}
 
 	this.clear = function() {
 		this.canvas.clearRect(0, 0, this.canvas.width, this.canvas.height);
 	}
 
-	this.draw = function() {
-		var item, cell;
+	this.startMoving = function(snake) {
+		var item, head, tail, aux, next=[];
 
-		this.clear();
-		this.canvas.fillStyle = this.snakes[0].color;
+		// We generate the default trail
+		if (snake.trail.queue.length == 0) {
+			for (i=0; i<snake.size; i++)				
+			{
+				item = new Array();
+
+				item[0] = (snake.x + i * snake.direction[0]) * this.cellSize;
+				item[1] = (snake.y + i * snake.direction[1]) * this.cellSize;
+				this.board[snake.y + i * snake.direction[1]][snake.x + i * snake.direction[0]] = 's';
+
+				snake.trail.enqueue(item);
+			}
+		}
+
+		// We find out the next position of the head
+		head = snake.trail.headCell();
+		next[0] = head[0] + (1 * snake.direction[0]) * this.cellSize;
+		next[1] = head[1] + (1 * snake.direction[1]) * this.cellSize;
+
+		// Walking through borders in mirror mode - vertical
+		if (next[0] == this.canvas.width) {
+			next[0] = 0;
+		}
+		else if (next[0] < 0) {
+			next[0] = this.canvas.width - 1 * this.cellSize;
+		}
+
+		// Walking through borders in mirror mode - horizontal
+		if (next[1] == this.canvas.height) {
+			next[1] = 0;
+		}
+		else if (next[1] < 0) {
+			next[1] = this.canvas.height - 1 * this.cellSize;
+		}
+
+		// We get the value of the next position
+		aux = this.board[next[1] / this.cellSize][next[0] / this.cellSize];
+
+		// We evaluate the value with some rules
+		if (aux === null) {
+			tail = snake.trail.tailCell();
+
+			this.board[tail[1] / this.cellSize][tail[0] / this.cellSize] = null;
+			this.board[next[1] / this.cellSize][next[0] / this.cellSize] = 's';
+
+			// We increaseSupplies the supplies if while we have
+			if (snake.supplies == 0) {
+				snake.trail.dequeue();
+			} else {
+				snake.supplies --;
+				snake.size ++;
+			}
+
+			snake.trail.enqueue(next);
+		} else {
+			// If snake hit itself we end the game
+			if (aux == 's') {
+				this.isOver = true;
+				return false;
+			}
+
+			//If snake hit a cookie
+			if (aux instanceof Cookie) {
+				this.board[next[1] / this.cellSize][next[0] / this.cellSize] = 's';
+
+				snake.increaseSupplies(aux);
+				snake.trail.enqueue(next);
+				
+				delete this.cookies[this.cookies.indexOf(aux)];
+			}
+		}
+
+		var context = this;
+		setTimeout(function() {
+			if (context.isPaused == true || context.isOver == true)
+				return false;
+
+			context.startMoving(snake);
+		}, snake.speed);
+	}
+
+	this.startDrawing = function() {
+		var item, cell;
+		var context = this;
 		
-		while (cell = this.snakes[0].trail.nextItem()) {
-    		this.canvas.fillRect(
+		// Clear canvas
+		this.clear();
+
+		// Draw Snake
+		this.snakes[0].trail.queue.forEach(function(cell){
+			context.canvas.fillStyle = context.snakes[0].color;
+    		context.canvas.fillRect(
     			cell[0], 
     			cell[1], 
-    			this.cellSize, 
-    			this.cellSize
+    			context.cellSize, 
+    			context.cellSize
     		);
-		}
-		context = this;
-		this.cookies.forEach(function(elem){
-			context.canvas.fillStyle = elem.color;
-			context.canvas.fillRect(
-    			elem.x, 
-    			elem.y, 
-    			elem.cellSize, 
-    			elem.cellSize
-    		);	
 		});
 
-		if (this.pause == true)
-			return false;
-
+		// Draw Cookies
+		this.cookies.forEach(function(cookie){
+			context.canvas.fillStyle = cookie.color;
+			context.canvas.fillRect(
+    			cookie.x, 
+    			cookie.y, 
+    			context.cellSize, 
+    			context.cellSize
+    		);	
+		});
 		
 		setTimeout(function() {
-			context.draw();
+			if (context.isPaused == true || context.isOver == true)
+				return false;
+
+			context.startDrawing();
 		}, this.speed);
 
 	}
 
-	this.bake = function() {
+	this.startBaking = function() {
 		var random = Math.floor((Math.random() * 300)) * 10 + 500;
-		console.log(random);
+		
 		var context = this;
-
 		setTimeout(function(){
+			if (context.isPaused == true || context.isOver == true)
+				return false;
+
 			context.generateCookie();
+			context.startBaking();
 		}, random);
 	}
 
@@ -234,13 +269,20 @@ var SnakeGame = function(query, params) {
 	}
 
 	this.toggle = function() {
-		this.pause = this.pause ? false : true;
+		this.isPaused = this.isPaused ? false : true;
 
-		this.snakes[0].toggle();
+		if (!this.isPaused) {
+			this.startDrawing();
+			this.startMoving(this.snakes[0]);
+			this.startBaking();
+		}
 
-		if (!this.pause) {
-			this.draw();
-			this.bake();
+		if (this.isOver) {
+			this.board = new Array();
+			this.snakes = new Array();
+			this.cookies = new Array();
+			this.init();
+			this.isOver = false;
 		}
 	}
 
@@ -249,22 +291,27 @@ var SnakeGame = function(query, params) {
 			this.container.width = this.width;
 			this.container.height = this.height;
 
-			this.canvas = this.container.getContext("2d");
+			// Create the Matrix
+			for (i=0; i<this.height/this.cellSize; i++){
+				this.board[i] = new Array();
+				for (j=0; j<this.width/this.cellSize; j++)
+					{
+						this.board[i][j] = null;
+					}
+			}
 
+			// Create the canvas properties
+			this.canvas = this.container.getContext("2d");
 			this.canvas.width = this.width;
 			this.canvas.height = this.height;
 
-		  	this.snakes[0] = new Snake(this.canvas, 3, 5 ,10, [1, 0], this.cellSize, "rgb(200,0,0)", this.speed);
+			// Generate Snake
+		  	this.snakes[0] = new Snake(3, 5 ,10, [1, 0], "rgb(200,0,0)", this.speed);
 		  	
 		  	// Keyboard
 		  	this.addEvents();
-
-		} else {
-		  	// canvas-unsupported code here
 		}
-
 	}
-
 }
 
 snake = new SnakeGame("#snake", {
