@@ -21,7 +21,7 @@ function SnakeGame(query, params) {
 		this.x = x;
 		this.y = y;
 		this.value = value;
-		this.color = "rgb(0, 0 ,255)";
+		this.color = color;
 		this.calories = calories;
 	}
 
@@ -32,6 +32,7 @@ function SnakeGame(query, params) {
 		this.direction = direction;
 		this.color = color;
 		this.speed = speed;
+		this.minSize = 4;
 		this.score = 0;
 		this.supplies = 0;
 
@@ -65,15 +66,52 @@ function SnakeGame(query, params) {
 	}
 
 	this.generateCookie = function() {
-		var x, y, value, cookie;
+		var x, y, value, cookie, randomNumber, color, calories, colors;
 
+		colors = ['rgb(100, 0, 100)', 'rgb(0, 100, 100)', 'rgb(100, 100, 0)', 'rgb(255, 255, 0)'];
+		
 		x = Math.floor((Math.random() * this.width));
 		y = Math.floor((Math.random() * this.height));
+		
 
-		cookie = new Cookie(x, y, 10, 'rgba(0, 0, 255)', 3);
+		// We create cookie only if the cell is empty
+		if (this.board[y][x] == null){
+			randomNumber = Math.floor(Math.random() * 101);
 
-		this.cookies.push(cookie);
-		this.board[y][x] = cookie;
+			// We find out what type of Cookie we create
+			if (randomNumber < 11) {
+				// We create the dietetic type
+				calories = -6;
+				color = colors[3];
+			} else {
+				// We create the fat one
+				calories = Math.floor(Math.random() * 3) + 1;
+				color = colors[calories-1];
+			}
+
+			cookie = new Cookie(x, y, 10, color, calories);
+
+			this.cookies.push(cookie);
+			this.board[y][x] = cookie;
+		}
+	}
+
+	this.speedUp = function() {
+		if (this.speed > 49){
+			this.speed -= 20;
+			this.snakes.forEach(function(snake, index, snakes){
+				snake.speed -= 20;	
+			})
+		}
+	}
+
+	this.speedDown = function() {
+		if (this.speed < 201){
+			this.speed += 20;
+			this.snakes.forEach(function(snake, index, snakes){
+				snake.speed += 20;	
+			})
+		}
 	}
 
 	this.clear = function() {
@@ -123,17 +161,27 @@ function SnakeGame(query, params) {
 
 		// We evaluate the value with some rules
 		if (aux === null) {
-			tail = snake.trail.tailCell();
 
-			this.board[tail[1]][tail[0]] = null;
 			this.board[next[1]][next[0]] = 's';
-
+			
 			// We increaseSupplies the supplies if while we have
 			if (snake.supplies == 0) {
+				tail = snake.trail.tailCell();
+				this.board[tail[1]][tail[0]] = null;
 				snake.trail.dequeue();
-			} else {
+			} else if(snake.supplies > 0){
 				snake.supplies --;
 				snake.size ++;
+			} else if(snake.supplies < 0){
+				while (snake.supplies < 0) {
+					if (snake.size > snake.minSize) {
+						tail = snake.trail.tailCell();
+						this.board[tail[1]][tail[0]] = null;
+						snake.size --;
+						snake.trail.dequeue();
+					}
+					snake.supplies ++;
+				}
 			}
 
 			snake.trail.enqueue(next);
@@ -150,6 +198,7 @@ function SnakeGame(query, params) {
 
 				snake.increaseSupplies(aux);
 				snake.trail.enqueue(next);
+				document.querySelector("#score").innerHTML = snake.score;
 				
 				delete this.cookies[this.cookies.indexOf(aux)];
 			}
@@ -171,43 +220,31 @@ function SnakeGame(query, params) {
 		// Clear canvas
 		this.clear();
 
-		// Draw Snake
-		this.snakes[0].trail.queue.forEach(function(cell, index, queue){
-			context.canvas.fillStyle = context.snakes[0].color;
-			
-			if (index != 0 && index != queue.length-1) {
-	    		context.canvas.fillRect(
-	    			cell[0] * context.cellSize, 
-	    			cell[1] * context.cellSize, 
-	    			context.cellSize, 
-	    			context.cellSize
-	    		);
-			} else {
-				context.canvas.beginPath();
-	      		context.canvas.arc(
-	      			cell[0] * context.cellSize + context.cellSize / 2, 
-	      			cell[1] * context.cellSize + context.cellSize / 2, 
-	      			context.cellSize / 2, 
-	      			0, 
-	      			2 * Math.PI, 
-	      			false
-	      		);
-				context.canvas.fill();
-			}
+		// Draw Snakes
+		this.snakes.forEach(function(snake, index, snakes){
+			snake.trail.queue.forEach(function(cell, index, queue){
+				context.canvas.fillStyle = snake.color;
+				context.canvas.fillRect(
+					cell[0] * context.cellSize, 
+					cell[1] * context.cellSize, 
+					context.cellSize, 
+					context.cellSize
+				);
+			});
 		});
 
 		// Draw Cookies
 		this.cookies.forEach(function(cookie){
 			context.canvas.fillStyle = cookie.color;
 			context.canvas.beginPath();
-      		context.canvas.arc(
-      			cookie.x * context.cellSize + context.cellSize / 2, 
-      			cookie.y * context.cellSize + context.cellSize / 2, 
-      			context.cellSize / 2, 
-      			0, 
-      			2 * Math.PI, 
-      			false
-      		);
+			context.canvas.arc(
+				cookie.x * context.cellSize + context.cellSize / 2, 
+				cookie.y * context.cellSize + context.cellSize / 2, 
+				context.cellSize / 2, 
+				0, 
+				2 * Math.PI, 
+				false
+			);
 			context.canvas.fill();
 		});
 		
@@ -237,54 +274,100 @@ function SnakeGame(query, params) {
 		context = this;
 		this.lockKeyboard = 0;
 
-	    window.onkeydown = function(e) {
-	    	e = e || window.event;
+		window.onkeydown = function(e) {
+			e = e || window.event;
 
-	    	if (context.lockKeyboard == 1)
-	    		return false;
+			if (context.lockKeyboard == 1)
+				return false;
 
-		    if (e.keyCode == '38') {
-		        // up arrow
-		        if (context.snakes[0].direction.join('|') != [0, 1].join('|'))
-		        {
+			if (e.keyCode == '38') {
+				// up arrow
+				if (context.snakes[0].direction.join('|') != [0, 1].join('|'))
+				{
 					context.lockKeyboard = 1;
 					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		        	
-			        context.snakes[0].direction = [0, -1];
-		        }
-		    }
-		    else if (e.keyCode == '40') {
-		        // down arrow
-		        if (context.snakes[0].direction.join('|') != [0, -1].join('|'))
-		        {
+					context.snakes[0].direction = [0, -1];
+				}
+			}
+			if (e.keyCode == '40') {
+				// down arrow
+				if (context.snakes[0].direction.join('|') != [0, -1].join('|'))
+				{
 					context.lockKeyboard = 1;
 					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		        	
-			        context.snakes[0].direction = [0, 1];
-		        }
-		    }
-		    else if (e.keyCode == '37') {
-		       // left arrow
-		        if (context.snakes[0].direction.join('|') != [1, 0].join('|'))
-		        {
+					context.snakes[0].direction = [0, 1];
+				}
+			}
+			if (e.keyCode == '37') {
+			   // left arrow
+				if (context.snakes[0].direction.join('|') != [1, 0].join('|'))
+				{
 					context.lockKeyboard = 1;
 					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		       	
-			        context.snakes[0].direction = [-1, 0];
-		        }
-		    }
-		    else if (e.keyCode == '39') {
-		        // right arrow
-		        if (context.snakes[0].direction.join('|') != [-1, 0].join('|'))
-		        {
+					context.snakes[0].direction = [-1, 0];
+				}
+			}
+			if (e.keyCode == '39') {
+				// right arrow
+				if (context.snakes[0].direction.join('|') != [-1, 0].join('|'))
+				{
 					context.lockKeyboard = 1;
 					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		       	
-			        context.snakes[0].direction = [1, 0];
-		        }
-		    }
-		    else if (e.keyCode == '32') {
-		    	// space key
-		    	context.toggle();
-		    }
+					context.snakes[0].direction = [1, 0];
+				}
+			}
 
-	    }
+			if (e.keyCode == '87') {
+				// up arrow
+				if (context.snakes[1].direction.join('|') != [0, 1].join('|'))
+				{
+					context.lockKeyboard = 1;
+					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		        	
+					context.snakes[1].direction = [0, -1];
+				}
+			}
+			if (e.keyCode == '83') {
+				// down arrow
+				if (context.snakes[1].direction.join('|') != [0, -1].join('|'))
+				{
+					context.lockKeyboard = 1;
+					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		        	
+					context.snakes[1].direction = [0, 1];
+				}
+			}
+			if (e.keyCode == '65') {
+			   // left arrow
+				if (context.snakes[1].direction.join('|') != [1, 0].join('|'))
+				{
+					context.lockKeyboard = 1;
+					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		       	
+					context.snakes[1].direction = [-1, 0];
+				}
+			}
+			if (e.keyCode == '68') {
+				// right arrow
+				if (context.snakes[1].direction.join('|') != [-1, 0].join('|'))
+				{
+					context.lockKeyboard = 1;
+					setTimeout(function(){ context.lockKeyboard = 0;}, context.speed)		       	
+					context.snakes[1].direction = [1, 0];
+				}
+			}
+
+			if (e.keyCode == '32') {
+				// space key
+				context.toggle();
+			} 
+			if (e.keyCode == '188') {
+				// < key
+				context.speedDown();
+			}
+			if (e.keyCode == '190') {
+				// > key
+				context.speedUp();
+			}
+
+		}
 	}
 
 	this.toggle = function() {
@@ -293,6 +376,7 @@ function SnakeGame(query, params) {
 		if (!this.isPaused) {
 			this.startDrawing();
 			this.startMoving(this.snakes[0]);
+			this.startMoving(this.snakes[1]);
 			this.startBaking();
 		}
 
@@ -300,6 +384,7 @@ function SnakeGame(query, params) {
 			this.board = new Array();
 			this.snakes = new Array();
 			this.cookies = new Array();
+			document.querySelector("#score").innerHTML = 0;
 			this.init();
 			this.isOver = false;
 		}
@@ -325,10 +410,11 @@ function SnakeGame(query, params) {
 			this.canvas.height = this.height * this.cellSize;
 
 			// Generate Snake
-		  	this.snakes[0] = new Snake(3, 5 ,10, [1, 0], "rgb(200,0,0)", this.speed);
-		  	
-		  	// Keyboard
-		  	this.addEvents();
+			this.snakes[0] = new Snake(3, 5 ,10, [1, 0], "rgb(200, 0, 0)", this.speed);
+			this.snakes[1] = new Snake(3, 25 ,10, [1, 0], "rgb(0, 200, 0)", this.speed);
+			
+			// Keyboard
+			this.addEvents();
 		}
 	}
 }
