@@ -1,0 +1,28 @@
+#Client Side:
+
+Game
+	Communicator
+	Keyboard
+	Interface
+		Map
+			Wall
+			Cookie
+			Snake
+		ScoreBoard
+		Chat
+
+
+
+
+#Server Side:
+
+Room
+Game
+	Communicator
+	Timer
+	Mode
+		Rule
+	Player
+		Snake
+	Cookie
+
